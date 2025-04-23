@@ -60,15 +60,25 @@ struct DogApi {
 
 #[server]
 async fn save_dog(image: String) -> Result<(), ServerFnError> {
-    use std::io::Write;
-
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .append(true)
-        .create(true)
-        .open("dogs.txt")
-        .unwrap();
-
-    file.write_fmt(format_args!("{image}\n"));
+    DB.with(|f|f.execute("INSERT INTO dogs (url) VALUES (?1)", &[&image]))?;
     Ok(())
+}
+
+
+#[cfg(feature = "server")]
+thread_local! {
+    pub static DB: rusqlite::Connection = {
+        let conn = rusqlite::Connection::open("hotdog.db").expect("Failed to open database");
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS dogs (
+                id INTEGER PRIMARY KEY,
+                url TEXT NOT NULL
+            );",
+            []
+        )
+        .expect("Failed to create table");
+
+        conn
+    };
 }
