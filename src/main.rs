@@ -14,7 +14,6 @@ fn App() -> Element {
     }
 }
 
-
 #[component]
 fn Title() -> Element {
     rsx! {
@@ -26,17 +25,50 @@ fn Title() -> Element {
 
 #[component]
 fn DogView() -> Element {
-    let img_src = use_hook(|| "https://images.dog.ceo/breeds/pitbull/dog-3981540_1280.jpg");
-
-    let skip = move |evt|{};
-    let save = move |evt|{};
+    let mut img_src = use_resource(|| async move {
+        reqwest::get("https://dog.ceo/api/breeds/image/random")
+            .await
+            .unwrap()
+            .json::<DogApi>()
+            .await
+            .unwrap()
+            .message
+    });
     rsx! {
         div { id: "dogview",
-            img { src: img_src }
+            img { src: img_src.cloned().unwrap_or_default() }
         }
         div { id: "buttons",
-            button { onclick: skip, id: "skip", "skip" }
-            button { onclick: save, id: "save", "save!" }
+            button { onclick: move|_|img_src.restart(), id: "skip", "skip" }
+            button { 
+                id: "save", 
+                onclick:  move|_|async move{
+                    let current = img_src.cloned().unwrap();
+                    img_src.restart();
+                    _ = save_dog(current).await;
+                }, 
+                "save!" 
+            }
         }
     }
+}
+
+#[derive(serde::Deserialize)]
+struct DogApi {
+    message: String,
+}
+
+#[server]
+async fn save_dog(image: String) -> Result<(), ServerFnError> {
+    use std::io::Write;
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open("dogs.txt")
+        .unwrap();
+
+    file.write_fmt(format_args!("{image}\n"));
+    Ok(())
 }
