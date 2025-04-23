@@ -1,0 +1,1 @@
+mode guide_component
